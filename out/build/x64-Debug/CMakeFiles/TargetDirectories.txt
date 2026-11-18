@@ -1,0 +1,2 @@
+C:/Users/maxko/OneDrive/Рабочий стол/client-manager-cpp/out/build/x64-Debug/CMakeFiles/edit_cache.dir
+C:/Users/maxko/OneDrive/Рабочий стол/client-manager-cpp/out/build/x64-Debug/CMakeFiles/rebuild_cache.dir
