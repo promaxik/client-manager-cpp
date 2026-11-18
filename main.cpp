@@ -12,67 +12,67 @@ private:
 public:
     ClientManager(string conn_str) : connection_string(conn_str) {}
 
-    // 1. Ñîçäàíèå òàáëèö
+    // 1. Создание таблиц
     void createTables() {
         try {
             pqxx::connection conn(connection_string);
             pqxx::work tx(conn);
 
-            // Òàáëèöà êëèåíòîâ
+            // Таблица клиентов
             tx.exec("CREATE TABLE IF NOT EXISTS clients ("
                 "id SERIAL PRIMARY KEY,"
                 "first_name VARCHAR(50) NOT NULL,"
                 "last_name VARCHAR(50) NOT NULL,"
                 "email VARCHAR(100) UNIQUE NOT NULL);");
 
-            // Òàáëèöà òåëåôîíîâ (ñâÿçü Îäèí-êî-Ìíîãèì ñ êàñêàäíûì óäàëåíèåì)
+            // Таблица телефонов (связь Один-ко-Многим с каскадным удалением)
             tx.exec("CREATE TABLE IF NOT EXISTS phones ("
                 "id SERIAL PRIMARY KEY,"
                 "client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,"
                 "phone_number VARCHAR(20) NOT NULL);");
             tx.commit();
-            cout << "[OK] Òàáëèöû óñïåøíî ñîçäàíû." << endl;
+            cout << "[OK] Таблицы успешно созданы." << endl;
         }
         catch (const exception& e) {
-            cerr << "[ERROR] Îøèáêà ïðè ñîçäàíèè òàáëèö: " << e.what() << endl;
+            cerr << "[ERROR] Ошибка при создании таблиц: " << e.what() << endl;
         }
     }
 
-    // 2. Äîáàâëåíèå êëèåíòà (èñïîëüçóåì exec_params äëÿ çàùèòû îò SQL-èíúåêöèé)
+    // 2. Добавление клиента (используем exec_params для защиты от SQL-инъекций)
     int addClient(const string& first_name, const string& last_name, const string& email) {
         try {
             pqxx::connection conn(connection_string);
             pqxx::work tx(conn);
-            // Áåçîïàñíàÿ ïåðåäà÷à ïàðàìåòðîâ ÷åðåç $1, $2, $3
+            // Безопасная передача параметров через $1, $2, $3
             pqxx::result res = tx.exec_params(
                 "INSERT INTO clients (first_name, last_name, email) VALUES ($1, $2, $3) RETURNING id;",
                 first_name, last_name, email);
             tx.commit();
             int new_id = res[0][0].as<int>();
-            cout << "[OK] Êëèåíò äîáàâëåí. ID: " << new_id << endl;
+            cout << "[OK] Клиент добавлен. ID: " << new_id << endl;
             return new_id;
         }
         catch (const exception& e) {
-            cerr << "[ERROR] Îøèáêà ïðè äîáàâëåíèè êëèåíòà: " << e.what() << endl;
+            cerr << "[ERROR] Ошибка при добавлении клиента: " << e.what() << endl;
             return -1;
         }
     }
 
-    // 3. Äîáàâëåíèå òåëåôîíà
+    // 3. Добавление телефона
     void addPhone(int client_id, const string& phone) {
         try {
             pqxx::connection conn(connection_string);
             pqxx::work tx(conn);
             tx.exec_params("INSERT INTO phones (client_id, phone_number) VALUES ($1, $2);", client_id, phone);
             tx.commit();
-            cout << "[OK] Òåëåôîí äîáàâëåí êëèåíòó ID " << client_id << endl;
+            cout << "[OK] Телефон добавлен клиенту ID " << client_id << endl;
         }
         catch (const exception& e) {
-            cerr << "[ERROR] Îøèáêà ïðè äîáàâëåíèè òåëåôîíà: " << e.what() << endl;
+            cerr << "[ERROR] Ошибка при добавлении телефона: " << e.what() << endl;
         }
     }
 
-    // 4. Èçìåíåíèå äàííûõ êëèåíòà
+    // 4. Изменение данных клиента
     void updateClient(int client_id, const string& new_first, const string& new_last, const string& new_email) {
         try {
             pqxx::connection conn(connection_string);
@@ -80,48 +80,48 @@ public:
             tx.exec_params("UPDATE clients SET first_name = $1, last_name = $2, email = $3 WHERE id = $4;",
                 new_first, new_last, new_email, client_id);
             tx.commit();
-            cout << "[OK] Äàííûå êëèåíòà ID " << client_id << " îáíîâëåíû." << endl;
+            cout << "[OK] Даннные клиента ID " << client_id << " îáíîâëåíû." << endl;
         }
         catch (const exception& e) {
-            cerr << "[ERROR] Îøèáêà ïðè îáíîâëåíèè: " << e.what() << endl;
+            cerr << "[ERROR] Ошибка при обновлении: " << e.what() << endl;
         }
     }
 
-    // 5. Óäàëåíèå òåëåôîíà
+    // 5. Удаление телефона
     void deletePhone(int client_id, const string& phone) {
         try {
             pqxx::connection conn(connection_string);
             pqxx::work tx(conn);
             tx.exec_params("DELETE FROM phones WHERE client_id = $1 AND phone_number = $2;", client_id, phone);
             tx.commit();
-            cout << "[OK] Òåëåôîí " << phone << " óäàëåí ó êëèåíòà ID " << client_id << endl;
+            cout << "[OK] Телефон " << phone << " удален у клиента ID " << client_id << endl;
         }
         catch (const exception& e) {
-            cerr << "[ERROR] Îøèáêà ïðè óäàëåíèè òåëåôîíà: " << e.what() << endl;
+            cerr << "[ERROR] Ошибка при удалении телефона: " << e.what() << endl;
         }
     }
 
-    // 6. Óäàëåíèå êëèåíòà (òåëåôîíû óäàëÿòñÿ àâòîìàòè÷åñêè áëàãîäàðÿ ON DELETE CASCADE)
+    // 6. Удаление клиента (телефоны удалятся автоматически благодаря ON DELETE CASCADE)
     void deleteClient(int client_id) {
         try {
             pqxx::connection conn(connection_string);
             pqxx::work tx(conn);
             tx.exec_params("DELETE FROM clients WHERE id = $1;", client_id);
             tx.commit();
-            cout << "[OK] Êëèåíò ID " << client_id << " è âñå åãî òåëåôîíû óäàëåíû." << endl;
+            cout << "[OK] Клиент ID " << client_id << " и все его телефоны удалены." << endl;
         }
         catch (const exception& e) {
-            cerr << "[ERROR] Îøèáêà ïðè óäàëåíèè êëèåíòà: " << e.what() << endl;
+            cerr << "[ERROR] Ошибка при удалении клиента: " << e.what() << endl;
         }
     }
 
-    // 7. Ïîèñê êëèåíòà ïî ëþáûì äàííûì
+    // 7. Поиск клиента по любым данным
     void findClient(const string& query) {
         try {
             pqxx::connection conn(connection_string);
             pqxx::work tx(conn);
 
-            // Ïîèñê ïî èìåíè, ôàìèëèè, email èëè òåëåôîíó. ILIKE - ðåãèñòðîíåçàâèñèìûé ïîèñê.
+            // Поиск по имени, фамилии, email или телефону. ILIKE - регистронезависимый поиск.
             string sql = "SELECT DISTINCT c.id, c.first_name, c.last_name, c.email "
                 "FROM clients c LEFT JOIN phones p ON c.id = p.client_id "
                 "WHERE c.first_name ILIKE $1 OR c.last_name ILIKE $1 OR c.email ILIKE $1 OR p.phone_number ILIKE $1;";
@@ -130,11 +130,11 @@ public:
             pqxx::result res = tx.exec_params(sql, search);
 
             if (res.empty()) {
-                cout << "Êëèåíò ïî çàïðîñó '" << query << "' íå íàéäåí." << endl;
+                cout << "Клиент по запросу '" << query << "' не найден." << endl;
                 return;
             }
 
-            cout << "--- Ðåçóëüòàòû ïîèñêà: '" << query << "' ---" << endl;
+            cout << "--- Результаты поиска: '" << query << "' ---" << endl;
             for (auto row : res) {
                 cout << "ID: " << row["id"].as<int>()
                     << " | " << row["first_name"].as<string>()
@@ -143,7 +143,7 @@ public:
             }
         }
         catch (const exception& e) {
-            cerr << "[ERROR] Îøèáêà ïðè ïîèñêå: " << e.what() << endl;
+            cerr << "[ERROR] Ошибка при поиске: " << e.what() << endl;
         }
     }
 };
@@ -153,37 +153,37 @@ int main() {
 
     ClientManager manager(conn_str);
 
-    cout << "=== ÄÅÌÎÍÑÒÐÀÖÈß ÐÀÁÎÒÛ ===" << endl;
+    cout << "=== ДЕМОНСТРАЦИЯ РАБОТЫ ===" << endl;
 
-    // 1. Ñîçäàåì òàáëèöû
+    // 1. Создаем таблицы
     manager.createTables();
 
-    // 2. Äîáàâëÿåì êëèåíòîâ
-    int id1 = manager.addClient("Èâàí", "Èâàíîâ", "ivan@mail.ru");
-    int id2 = manager.addClient("Àííà", "Ñìèðíîâà", "anna@yandex.ru");
+    // 2. Добавляем клиентов
+    int id1 = manager.addClient("Иван", "Иванов", "ivan@mail.ru");
+    int id2 = manager.addClient("Анна", "Смирнова", "anna@yandex.ru");
 
-    // 3. Äîáàâëÿåì òåëåôîíû
+    // 3. Добавляем телефоны
     manager.addPhone(id1, "+79991112233");
-    manager.addPhone(id1, "+78887776655"); // Ó Èâàíà äâà òåëåôîíà
-    manager.addPhone(id2, "+79123456789"); // Ó Àííû îäèí
+    manager.addPhone(id1, "+78887776655"); // У Ивана два телефона
+    manager.addPhone(id2, "+79123456789"); // У Анны один
 
-    // 4. Èçìåíÿåì äàííûå
-    manager.updateClient(id2, "Àííà", "Ïåòðîâà", "anna_new@yandex.ru");
+    // 4. Изменяем данные
+    manager.updateClient(id2, "Анна", "Петрова", "anna_new@yandex.ru");
 
-    // 5. Óäàëÿåì îäèí òåëåôîí
+    // 5. Удаляем один телефон
     manager.deletePhone(id1, "+78887776655");
 
-    // 7. Èùåì êëèåíòîâ (äî óäàëåíèÿ)
-    cout << "\n--- Ïîèñê êëèåíòîâ ---" << endl;
-    manager.findClient("Èâàí");       // Ïî èìåíè
-    manager.findClient("+7999");      // Ïî ÷àñòè òåëåôîíà
+    // 7. Ищем клиентов (до удаления)
+    cout << "\n--- Поиск клиентов ---" << endl;
+    manager.findClient("Иван");       // По имени
+    manager.findClient("+7999");      // По части телефона
 
-    // 6. Óäàëÿåì êëèåíòà
+    // 6. Удаляем клиента
     manager.deleteClient(id1);
 
-    // Ïðîâåðÿåì, ÷òî Èâàí óäàëèëñÿ âìåñòå ñ òåëåôîíàìè
-    cout << "\n--- Ïîèñê óäàëåííîãî êëèåíòà ---" << endl;
-    manager.findClient("Èâàí");
+    // Проверяем, что Иван удалился вместе с телефоном
+    cout << "\n--- Поиск удаленного клиента ---" << endl;
+    manager.findClient("Иван");
 
     return 0;
 }
